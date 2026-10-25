@@ -1,0 +1,21 @@
+# secrets and local state
+.env
+.env.*
+!.env.example
+audit_log.jsonl
+refill_state.json
+*_decision.json
+.tmp_upload.pdf
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# editors / os
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

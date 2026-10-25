@@ -1,0 +1,33 @@
+{
+  "vendor_name": "Maya Chen Design Studio",
+  "vendor_country": "US",
+  "vendor_is_individual": true,
+  "invoice_number": "MCDS-2026-041",
+  "issue_date": "2026-10-05",
+  "due_date": "2026-11-04",
+  "currency": "USD",
+  "total": 450.0,
+  "tax_shown": 0,
+  "payment_email": "maya@chendesign-studio.example",
+  "work_location": "All design work was performed remotely from Portland, Oregon, USA.",
+  "line_items": [
+    {
+      "description": "Website UI design work - landing page and pricing page layouts",
+      "quantity": 5,
+      "unit_price": 75.0,
+      "amount": 375.0,
+      "category": "service_performed_abroad",
+      "category_reason": "Invoice says 'Website UI design work' and 'All design work was performed remotely from Portland, Oregon, USA', so the service was performed outside Japan."
+    },
+    {
+      "description": "Design review meetings (online)",
+      "quantity": 1,
+      "unit_price": 75.0,
+      "amount": 75.0,
+      "category": "service_performed_abroad",
+      "category_reason": "Invoice says 'Design review meetings (online)' and 'All design work was performed remotely from Portland, Oregon, USA', so the service was performed outside Japan."
+    }
+  ],
+  "notes_summary": "Payment via PayPal to maya@chendesign-studio.example, Net 30 terms, hourly rate $75.00, time log available on request, no sales tax shown.",
+  "check_warnings": []
+}

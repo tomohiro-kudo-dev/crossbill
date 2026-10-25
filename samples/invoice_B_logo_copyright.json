@@ -1,0 +1,33 @@
+{
+  "vendor_name": "Maya Chen Design Studio",
+  "vendor_country": "US",
+  "vendor_is_individual": true,
+  "invoice_number": "MCDS-2026-047",
+  "issue_date": "2026-10-19",
+  "due_date": "2026-11-18",
+  "currency": "USD",
+  "total": 600.0,
+  "tax_shown": 0,
+  "payment_email": "maya@chendesign-studio.example",
+  "work_location": "Design work was performed remotely from Portland, Oregon, USA.",
+  "line_items": [
+    {
+      "description": "Logo design - 3 initial concepts and 2 rounds of revisions",
+      "quantity": 1,
+      "unit_price": 400.0,
+      "amount": 400.0,
+      "category": "service_performed_abroad",
+      "category_reason": "Invoice says \"Logo design - 3 initial concepts and 2 rounds of revisions\" and notes \"Design work was performed remotely from Portland, Oregon, USA.\""
+    },
+    {
+      "description": "Assignment of copyright for final logo (exclusive, worldwide, perpetual)",
+      "quantity": 1,
+      "unit_price": 200.0,
+      "amount": 200.0,
+      "category": "copyright_assignment",
+      "category_reason": "Invoice says \"Assignment of copyright for final logo (exclusive, worldwide, perpetual)\" and notes \"the designer assigns all copyright in the final logo to the client.\""
+    }
+  ],
+  "notes_summary": "Payment via PayPal to maya@chendesign-studio.example, Net 30; upon full payment the designer assigns all copyright in the final logo to the client, including the right to register it as a trademark in Japan.",
+  "check_warnings": []
+}

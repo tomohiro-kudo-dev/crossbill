@@ -1,0 +1,8 @@
+anthropic
+streamlit
+streamlit-aggrid
+pandas
+requests
+python-dotenv
+holidays
+reportlab

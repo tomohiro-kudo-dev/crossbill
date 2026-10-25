@@ -1,0 +1,59 @@
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Carlito, Noto Sans CJK JP, sans-serif", "fontSize": "15px", "primaryColor": "#FFFFFF", "primaryBorderColor": "#7F7F7F", "primaryTextColor": "#000000", "lineColor": "#595959", "clusterBkg": "#F7F7F7", "clusterBorder": "#BFBFBF"}, "flowchart": {"curve": "basis", "nodeSpacing": 22, "rankSpacing": 46, "padding": 12}}}%%
+flowchart LR
+    A([Vendor invoice PDF<br/>in foreign currency])
+
+    subgraph S1["① AI reads · Claude"]
+        direction TB
+        B[Extract vendor, country,<br/>amounts, line items] --> C[Classify each line<br/>with a quoted reason] --> D[Arithmetic check<br/>flag mismatches]
+    end
+
+    subgraph S2["② Human reviews · AG Grid"]
+        direction TB
+        E[See AI category<br/>and its reason] --> E2[Fix the category<br/>if it is wrong]
+    end
+
+    subgraph S3["③ Japan rule pack · fixed rules"]
+        direction TB
+        F[FX conversion<br/>JPY pay: TTM · USD pay: TTB] --> G[Consumption tax<br/>out of scope / domestic /<br/>reverse charge]
+        G --> H{Royalty to a<br/>non-resident?}
+        H -- no --> L[No withholding]
+        H -- yes --> I{Treaty form<br/>filed?}
+        I -- no --> J[Withhold 20.42%<br/>round down to yen]
+        I -- yes --> K[Treaty rate<br/>exempt or reduced]
+        L --> M[Account, journal entry,<br/>tax due date]
+        J --> M
+        K --> M
+    end
+
+    subgraph S4["④ Human approves"]
+        direction TB
+        N[Review flags, amounts,<br/>journal entry] --> O[Approve with approver name<br/>or send back to ②]
+    end
+
+    subgraph S5["⑤ PayPal Payouts · sandbox"]
+        direction TB
+        P{PAYOUT_DRY_RUN} -- true --> Q[Simulated payout]
+        P -- false --> R[JP business account<br/>pays JPY] --> S[US vendor account<br/>receives JPY] --> T[SUCCESS]
+    end
+
+    subgraph S6["Records"]
+        direction TB
+        U[Audit log<br/>approver, AI vs human edits] --> V[(Journal CSV<br/>freee / Money Forward)]
+    end
+
+    subgraph S7["Dev tool · auto_refill.py"]
+        direction TB
+        X[Watch audit log<br/>for SUCCESS] --> Y[Vendor sends the same<br/>amount back to JP account]
+    end
+
+    A --> S1 --> S2 --> S3 --> S4 --> S5 --> S6
+    S5 -. after SUCCESS .-> S7
+
+    classDef ai fill:#20B1CE,stroke:#20B1CE,color:#FFFFFF
+    classDef human fill:#F2A245,stroke:#F2A245,color:#000000
+    classDef paypal fill:#404040,stroke:#404040,color:#FFFFFF
+    classDef dev fill:#FFFFFF,stroke:#A6A6A6,color:#595959,stroke-dasharray:4 3
+    class B,C,D ai
+    class E,E2,N,O human
+    class R,S,T paypal
+    class X,Y dev
