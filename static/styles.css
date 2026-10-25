@@ -33,8 +33,6 @@
 .btn-plain:hover:not(:disabled) { background: #f3f4f6; }
 .btn-ai { background: #fff; border-color: var(--ai); color: #0f7f96; }
 .btn-ai:hover:not(:disabled) { background: rgba(32, 177, 206, 0.08); }
-.btn-human { background: var(--human); color: #111827; }
-.btn-human:hover:not(:disabled) { filter: brightness(0.95); }
 .btn-paypal { background: var(--paypal); color: #fff; }
 .btn-paypal:hover:not(:disabled) { background: #262626; }
 .field { display: flex; flex-direction: column; gap: 0.2rem; color: #374151; }

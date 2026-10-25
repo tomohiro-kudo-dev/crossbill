@@ -1,0 +1,31 @@
+# Render blueprint: https://render.com/docs/blueprint-spec
+# Secrets are marked sync: false, so Render asks for them when the blueprint is applied
+# (they are never stored in this file).
+services:
+  - type: web
+    name: crossbill
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.7
+      # Safety switch: the public demo simulates payouts. Set to false only for a recorded sandbox run.
+      - key: PAYOUT_DRY_RUN
+        value: "true"
+      - key: ANTHROPIC_MODEL
+        value: claude-haiku-5-5
+      - key: MAX_UPLOAD_MB
+        value: "5"
+      - key: EXTRACT_RATE_LIMIT_PER_HOUR
+        value: "30"
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_RECEIVER_EMAIL
+        sync: false
