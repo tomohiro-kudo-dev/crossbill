@@ -6,3 +6,9 @@ requests
 python-dotenv
 holidays
 reportlab
+fastapi
+uvicorn
+jinja2
+python-multipart
+pytest
+httpx
