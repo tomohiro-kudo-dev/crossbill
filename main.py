@@ -3,11 +3,14 @@
 Run:
     uvicorn main:app --reload
 """
+from dotenv import load_dotenv
+
+load_dotenv()  # first, so every module below sees .env; values like PAYOUT_DRY_RUN are still read when used
+
 import logging
 from datetime import date
 from pathlib import Path
 
-from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
@@ -22,7 +25,6 @@ from services import extraction
 from services import payout as payout_service
 from services import samples as sample_service
 
-load_dotenv()
 log = logging.getLogger("crossbill")
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -31,11 +33,21 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
+def check_config() -> None:
+    """Validate settings once at startup; problems are shown on /healthz and on the page."""
+    app.state.config_warnings = payout_service.config_warnings()
+    for w in app.state.config_warnings:
+        log.warning("Config: %s", w)
+
+
+check_config()
+
+
 # ---------- errors: always {"error": "..."}, never a stack trace ----------
 @app.exception_handler(extraction.ExtractionError)
 @app.exception_handler(payout_service.PayoutError)
 async def service_error(_: Request, exc: extraction.ExtractionError | payout_service.PayoutError):
-    return JSONResponse({"error": exc.message}, status_code=exc.status)
+    return JSONResponse({"error": exc.message, **getattr(exc, "details", {})}, status_code=exc.status)
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -91,6 +103,7 @@ class ApproveRequest(DecideRequest):
 def index(request: Request):
     return templates.TemplateResponse(request, "index.html", {
         "dry_run": payout_service.is_dry_run(),
+        "config_warnings": app.state.config_warnings,
         "categories": decision_service.CATEGORIES,
         "journal_header": decision_service.JOURNAL_HEADER,
     })
@@ -98,7 +111,9 @@ def index(request: Request):
 
 @app.get("/healthz")
 def healthz():
-    return {"ok": True, "dry_run": payout_service.is_dry_run()}
+    warnings = app.state.config_warnings
+    return {"ok": True, "dry_run": payout_service.is_dry_run(),
+            "receiver_email_ok": not warnings, "warnings": warnings}
 
 
 @app.get("/api/samples")

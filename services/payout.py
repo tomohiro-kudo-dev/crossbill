@@ -16,20 +16,36 @@ from services.decision import decide
 log = logging.getLogger("crossbill.payout")
 _log_lock = threading.Lock()
 _BATCH_ID_RE = re.compile(r"^[A-Za-z0-9-]{1,64}$")
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s.]+$")
 
 
 class PayoutError(Exception):
     """An error with an HTTP status and a message that is safe to show to the user."""
 
-    def __init__(self, status: int, message: str):
+    def __init__(self, status: int, message: str, details: dict | None = None):
         super().__init__(message)
         self.status = status
         self.message = message
+        self.details = details or {}  # extra JSON fields for the page, e.g. {"paypal_error": {...}}
 
 
 def is_dry_run() -> bool:
     """A real payout happens only when PAYOUT_DRY_RUN is explicitly false."""
     return os.getenv("PAYOUT_DRY_RUN", "true").strip().lower() != "false"
+
+
+def receiver_email_valid(email: str | None) -> bool:
+    return bool(email) and bool(_EMAIL_RE.match(email))
+
+
+def config_warnings() -> list[str]:
+    """Problems with the payout settings, checked at startup. The address itself is never shown."""
+    email = os.getenv("PAYPAL_RECEIVER_EMAIL", "").strip()
+    if not email:
+        return ["PAYPAL_RECEIVER_EMAIL is not set: real sandbox payouts are disabled."]
+    if not receiver_email_valid(email):
+        return ["PAYPAL_RECEIVER_EMAIL is not a valid email address: real sandbox payouts are disabled."]
+    return []
 
 
 def audit_log_path() -> Path:
@@ -66,15 +82,19 @@ def approve(invoice: dict, settings: dict, decision: dict, approver: str, overri
         batch = {"payout_batch_id": f"DRY-{datetime.now():%Y%m%d}-{uuid.uuid4().hex[:6]}", "batch_status": "PENDING"}
         receiver = os.getenv("PAYPAL_RECEIVER_EMAIL") or final["payment_email"]
     else:
-        receiver = os.getenv("PAYPAL_RECEIVER_EMAIL")
+        receiver = os.getenv("PAYPAL_RECEIVER_EMAIL", "").strip()
         if not (os.getenv("PAYPAL_CLIENT_ID") and os.getenv("PAYPAL_CLIENT_SECRET") and receiver):
             raise PayoutError(503, "PayPal is not configured on this server "
                                    "(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_RECEIVER_EMAIL).")
+        if not receiver_email_valid(receiver):
+            raise PayoutError(503, "PAYPAL_RECEIVER_EMAIL is not a valid email address. Nothing was paid.")
         try:
             batch = paypal_client.create_payout(final["pay_amount"], final["pay_currency"], receiver,
                                                 final["invoice_number"], _note(final))
-        except RuntimeError as e:  # PayPal API error: name and message only
-            raise PayoutError(502, f"PayPal rejected the payout: {e}")
+        except RuntimeError as e:  # paypal_client raises "NAME: message" from the API error body
+            name, _, message = str(e).partition(": ")
+            raise PayoutError(502, f"PayPal rejected the payout: {e}",
+                              {"paypal_error": {"name": name, "message": message}})
         except requests.RequestException as e:
             log.warning("PayPal request failed: %s", type(e).__name__)
             raise PayoutError(502, "Could not reach PayPal. Nothing was paid; please try again.")

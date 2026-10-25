@@ -37,7 +37,12 @@
     const res = await fetch(path, options);
     const isJson = (res.headers.get("content-type") || "").includes("application/json");
     const body = isJson ? await res.json() : await res.blob();
-    if (!res.ok) throw new Error((isJson && body.error) || `Request failed (${res.status})`);
+    if (!res.ok) {
+      const err = new Error((isJson && body.error) || `Request failed (${res.status})`);
+      err.status = res.status;
+      err.body = isJson ? body : null;
+      throw err;
+    }
     return body;
   }
   const postJson = (path, data) =>
@@ -138,6 +143,7 @@
     state.decision = null;
     state.payout = null;
     $("confirm").checked = false;
+    showApproveError("");
     renderPayout();
 
     // "Pay in": JPY or the invoice currency
@@ -351,8 +357,14 @@
     $("approve-hint").textContent = state.payout ? "Approved." : ok ? "" : "Tick the checkbox and enter the approver name.";
   }
 
+  function showApproveError(text) {
+    $("approve-error").textContent = text;
+    $("approve-error").classList.toggle("hidden", !text);
+  }
+
   async function approve() {
     $("approve").disabled = true;
+    showApproveError("");
     showStatus(dryRun ? "Recording the approval (simulated payout)..." : "Sending the payout to PayPal...");
     try {
       const res = await postJson("/api/approve", {
@@ -366,7 +378,9 @@
       renderPayout();
       showStatus(res.dry_run ? "Approved. Simulated payout recorded in the audit log." : "Approved. Payout sent to PayPal.");
     } catch (e) {
-      showStatus(`Approval failed: ${e.message}`, "error");
+      showStatus("");
+      const pp = e.body && e.body.paypal_error;
+      showApproveError(pp ? `PayPal error ${pp.name}: ${pp.message} Nothing was paid.` : `Approval failed: ${e.message}`);
     }
     renderApprove();
     renderSteps();

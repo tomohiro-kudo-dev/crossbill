@@ -56,3 +56,7 @@
 .cell-category { background: var(--human-tint); }
 .edited-marker { display: block; font-size: 10px; line-height: 1.2; color: #9a5a0c; font-weight: 600; }
 .ag-cell.cell-num { text-align: right; }
+
+/* Errors that stop a payment: the one place red is used */
+.approve-error { color: #b91c1c; font-size: 0.875rem; font-weight: 500; }
+.config-warning { color: #b91c1c; background: #fef2f2; border: 1px solid #fca5a5; }

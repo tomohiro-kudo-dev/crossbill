@@ -61,7 +61,8 @@ def test_journal_rows_balance():
 # ---------- API ----------
 def test_healthz_defaults_to_dry_run(monkeypatch):
     monkeypatch.delenv("PAYOUT_DRY_RUN", raising=False)
-    assert client.get("/healthz").json() == {"ok": True, "dry_run": True}
+    body = client.get("/healthz").json()
+    assert body["ok"] is True and body["dry_run"] is True
 
 
 def test_samples_endpoints():

@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import extract_invoice
+import main
 import paypal_client
 from main import app
 from services import extraction, samples
@@ -260,9 +261,82 @@ def test_audit_log_works_with_auto_refill(monkeypatch, isolated):
     """tools/auto_refill.py must skip dry-run lines and pick up real batch IDs."""
     monkeypatch.setenv("PAYPAL_RECEIVER_EMAIL", "sb@x.example")
     monkeypatch.setenv("PAYPAL_SENDER_EMAIL", "sb2@x.example")
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: None)  # keep the developer's .env out of tests
     auto_refill = importlib.import_module("tools.auto_refill")
     client.post("/api/approve", json=approve_body())
     dry_entry = json.loads(isolated.read_text(encoding="utf-8"))
     assert auto_refill.find_batch_ids(dry_entry) == []
     real_entry = {**dry_entry, "dry_run": False, "payout_batch_id": "5UXD2E8A7EBQJ"}
     assert auto_refill.find_batch_ids(real_entry) == ["5UXD2E8A7EBQJ"]
+
+
+# ---------- dry-run switch read at use time ----------
+def test_dry_run_is_read_when_used(monkeypatch):
+    monkeypatch.setenv("PAYOUT_DRY_RUN", "false")
+    assert client.get("/healthz").json()["dry_run"] is False
+    monkeypatch.setenv("PAYOUT_DRY_RUN", "true")
+    assert client.get("/healthz").json()["dry_run"] is True
+
+
+def test_dotenv_loaded_before_services():
+    src = open(main.__file__, encoding="utf-8").read()
+    assert src.index("load_dotenv()") < src.index("from services")
+
+
+# ---------- PayPal errors shown to the approver ----------
+def test_paypal_502_returns_error_name_and_message(monkeypatch):
+    monkeypatch.setenv("PAYOUT_DRY_RUN", "false")
+    for k, v in (("PAYPAL_CLIENT_ID", "id"), ("PAYPAL_CLIENT_SECRET", "s"), ("PAYPAL_RECEIVER_EMAIL", "sb@x.example")):
+        monkeypatch.setenv(k, v)
+
+    def reject(*a):
+        raise RuntimeError("RECEIVER_UNREGISTERED: Receiver is unregistered.")
+    monkeypatch.setattr(paypal_client, "create_payout", reject)
+    r = client.post("/api/approve", json=approve_body())
+    assert r.status_code == 502
+    assert r.json()["paypal_error"] == {"name": "RECEIVER_UNREGISTERED", "message": "Receiver is unregistered."}
+
+
+def test_page_has_approve_error_slot():
+    assert 'id="approve-error"' in client.get("/").text
+
+
+# ---------- receiver email checked at startup ----------
+@pytest.fixture
+def startup_with(monkeypatch):
+    def run(email):
+        if email is None:
+            monkeypatch.delenv("PAYPAL_RECEIVER_EMAIL", raising=False)
+        else:
+            monkeypatch.setenv("PAYPAL_RECEIVER_EMAIL", email)
+        main.check_config()
+    yield run
+    monkeypatch.undo()
+    main.check_config()
+
+
+@pytest.mark.parametrize("email, ok", [
+    ("sb-abc123@business.example.com", True),
+    ("  sb-abc123@business.example.com  ", True),
+    ("sb-abc123", False),
+    ("sb@@example.com", False),
+    ("sb abc@example.com", False),
+    ("sb@example", False),
+    (None, False),
+])
+def test_receiver_email_checked_at_startup(startup_with, email, ok):
+    startup_with(email)
+    body = client.get("/healthz").json()
+    assert body["receiver_email_ok"] is ok and bool(body["warnings"]) is not ok
+    page = client.get("/").text
+    assert ("Configuration:" in page) is not ok
+    if email:
+        assert email.strip() not in str(body) and email.strip() not in page  # never echo the address
+
+
+def test_invalid_receiver_blocks_real_payout(monkeypatch, isolated):
+    monkeypatch.setenv("PAYOUT_DRY_RUN", "false")
+    for k, v in (("PAYPAL_CLIENT_ID", "id"), ("PAYPAL_CLIENT_SECRET", "s"), ("PAYPAL_RECEIVER_EMAIL", "not-an-email")):
+        monkeypatch.setenv(k, v)
+    r = client.post("/api/approve", json=approve_body())
+    assert r.status_code == 503 and "valid email" in r.json()["error"] and not isolated.exists()
