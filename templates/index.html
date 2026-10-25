@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crossbill</title>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/dist/ag-grid-community.min.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}">
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans">
+<div class="max-w-[1600px] mx-auto px-4 py-4">
+
+  <!-- Header -->
+  <header class="flex flex-wrap items-end justify-between gap-2">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight">Crossbill</h1>
+      <p class="text-sm text-gray-600">AI reads · rules decide · humans approve</p>
+    </div>
+    <p class="text-xs text-gray-500">Foreign vendor invoice → Japan tax rules → PayPal payout (sandbox)</p>
+  </header>
+
+  <!-- Progress -->
+  <ol id="steps" class="mt-4 grid grid-cols-5 gap-1 text-sm">
+    <li data-step="1" class="step"><span class="step-num">1</span> Read <span class="step-who">(AI)</span></li>
+    <li data-step="2" class="step"><span class="step-num">2</span> Review</li>
+    <li data-step="3" class="step"><span class="step-num">3</span> Decide</li>
+    <li data-step="4" class="step"><span class="step-num">4</span> Approve</li>
+    <li data-step="5" class="step"><span class="step-num">5</span> Pay</li>
+  </ol>
+
+  <!-- Invoice source -->
+  <section class="mt-4 bg-white border border-gray-200 rounded-lg p-3">
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
+      <div class="flex flex-wrap items-center gap-2" id="sample-list">
+        <span class="text-sm font-semibold mr-1">Samples</span>
+        <span class="text-sm text-gray-500">Loading...</span>
+      </div>
+      <form id="upload-form" class="flex flex-wrap items-center gap-2">
+        <span class="text-sm font-semibold mr-1">Your invoice</span>
+        <input id="upload-file" type="file" accept="application/pdf,.pdf"
+               class="text-sm file:mr-2 file:px-2 file:py-1 file:border file:border-gray-300 file:rounded file:bg-white file:text-sm">
+        <button type="submit" class="btn btn-ai">Read with AI</button>
+      </form>
+    </div>
+    <p id="status" class="mt-2 text-sm hidden" role="status"></p>
+  </section>
+
+  <div id="empty" class="mt-6 text-center text-gray-500 text-sm py-16 border border-dashed border-gray-300 rounded-lg">
+    Load a sample or upload a vendor invoice (PDF) to start.
+  </div>
+
+  <div id="workspace" class="hidden">
+  <main class="mt-4 lg:flex gap-4 items-start">
+    <!-- Left: invoice -->
+    <section class="lg:w-[45%] min-w-0 flex flex-col gap-4 lg:sticky lg:top-4">
+      <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <iframe id="pdf" title="Invoice PDF" class="w-full h-[60vh] min-h-[420px] block"></iframe>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-lg p-4">
+        <h2 class="card-title"><span class="ai-dot"></span>What the AI read</h2>
+        <p id="ai-source" class="text-xs text-gray-500 mb-2"></p>
+        <dl id="ai-fields" class="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm"></dl>
+        <h3 class="mt-4 mb-1 text-sm font-semibold">Line items and the AI's reasons</h3>
+        <ol id="ai-lines" class="space-y-2 text-sm"></ol>
+      </div>
+    </section>
+
+    <!-- Right: review, decision, approval -->
+    <section class="lg:w-[55%] min-w-0 flex flex-col gap-4 mt-4 lg:mt-0">
+
+      <!-- 1. Amount to pay -->
+      <div class="bg-white border border-gray-200 rounded-lg p-4">
+        <h2 class="card-title">Amount to pay</h2>
+        <p id="pay-amount" class="text-4xl font-bold tabular-nums">—</p>
+        <dl class="mt-3 grid grid-cols-3 gap-3 text-sm">
+          <div><dt class="text-gray-500">Total</dt><dd id="total-jpy" class="font-semibold tabular-nums">—</dd></div>
+          <div><dt class="text-gray-500">Withholding tax</dt><dd id="wht-jpy" class="font-semibold tabular-nums">—</dd></div>
+          <div><dt class="text-gray-500">FX rate used</dt><dd id="fx-used" class="font-semibold tabular-nums">—</dd></div>
+        </dl>
+        <ul id="wht-basis" class="mt-3 text-sm text-gray-700 space-y-0.5"></ul>
+      </div>
+
+      <!-- 2. Line items -->
+      <div class="bg-white border border-gray-200 rounded-lg p-4">
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 class="card-title">Line items</h2>
+          <p class="text-xs text-gray-500">Fix the <span class="human-tint px-1 rounded">category</span> if the AI got it wrong — the tax decision updates instantly.</p>
+        </div>
+        <div id="grid" class="ag-theme-quartz w-full mt-2"></div>
+        <p id="overrides" class="mt-2 text-xs text-gray-600 hidden"></p>
+      </div>
+
+      <!-- 3. Settings -->
+      <details id="settings" class="bg-white border border-gray-200 rounded-lg p-4" open>
+        <summary class="card-title cursor-pointer select-none mb-0">Payment settings</summary>
+        <form id="settings-form" class="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+          <label class="field">Payment date
+            <input name="payment_date" type="date" required class="input">
+          </label>
+          <label class="field">Pay in
+            <select name="pay_currency" class="input"><option value="JPY">JPY</option></select>
+          </label>
+          <label class="field">Approver name
+            <input name="approver" type="text" autocomplete="name" class="input" data-sync="approver">
+          </label>
+          <label class="field">TTM (mid rate)
+            <input name="ttm" type="number" step="0.01" min="0.01" value="150.00" required class="input tabular-nums">
+          </label>
+          <label class="field">TTB on payment date
+            <input name="ttb" type="number" step="0.01" min="0.01" value="149.00" required class="input tabular-nums">
+          </label>
+          <label class="flex items-start gap-2 self-end pb-1">
+            <input name="treaty_form" type="checkbox" class="h-4 w-4 mt-0.5 accent-[#F2A245]">
+            <span>Treaty form filed<span class="block text-xs text-gray-500">租税条約に関する届出書</span></span>
+          </label>
+          <p class="col-span-full text-xs text-gray-500">Demo values — use your main bank's published rates.</p>
+        </form>
+      </details>
+
+      <!-- 4. Flags -->
+      <div id="flags-box" class="flags-box rounded-lg p-4">
+        <h2 class="card-title">Check before approving</h2>
+        <ul id="flags" class="list-disc pl-5 space-y-1 text-sm"></ul>
+      </div>
+
+      <!-- 5. Journal -->
+      <div class="bg-white border border-gray-200 rounded-lg p-4">
+        <div class="flex items-baseline justify-between gap-2">
+          <h2 class="card-title">Journal entry</h2>
+          <button id="download-csv" type="button" class="btn btn-plain">Download CSV</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="journal w-full text-sm tabular-nums">
+            <thead><tr id="journal-head"></tr></thead>
+            <tbody id="journal-body"></tbody>
+          </table>
+        </div>
+        <p class="mt-1 text-xs text-gray-500">UTF-8 CSV for freee / Money Forward import. Map columns to your accounting software.</p>
+      </div>
+
+      <!-- 6. Approve and pay -->
+      <div class="bg-white border border-gray-200 rounded-lg p-4">
+        <h2 class="card-title">Approve and pay</h2>
+        {% if dry_run %}
+        <p class="mb-3 text-sm bg-gray-100 border border-gray-300 text-gray-700 rounded p-2">
+          Simulation mode: <code>PAYOUT_DRY_RUN=true</code>. Approving writes the audit log but does not call PayPal.
+        </p>
+        {% endif %}
+        <p id="receiver-note" class="text-xs text-gray-500 mb-3"></p>
+        <div class="flex flex-col gap-3 text-sm">
+          <label class="flex items-center gap-2">
+            <input id="confirm" type="checkbox" class="h-4 w-4 accent-[#F2A245]">
+            I have checked every item above
+          </label>
+          <label class="field max-w-xs">Approver name
+            <input id="approver" type="text" autocomplete="name" class="input" data-sync="approver" required>
+          </label>
+          <div>
+            <button id="approve" type="button" class="btn btn-paypal" disabled>
+              {{ "Approve (simulated payout)" if dry_run else "Approve and pay with PayPal" }}
+            </button>
+            <span id="approve-hint" class="ml-2 text-xs text-gray-500">Tick the checkbox and enter the approver name.</span>
+          </div>
+        </div>
+        <div id="payout" class="mt-4 hidden border-t border-gray-200 pt-3 text-sm">
+          <dl class="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1">
+            <dt class="text-gray-500">Payout batch ID</dt><dd id="batch-id" class="font-mono break-all"></dd>
+            <dt class="text-gray-500">Status</dt><dd id="batch-status" class="font-semibold"></dd>
+          </dl>
+          <button id="refresh-status" type="button" class="btn btn-plain mt-2">Refresh status</button>
+        </div>
+      </div>
+    </section>
+  </main>
+  </div>
+
+  <footer class="mt-8 mb-4 text-xs text-gray-500 text-center">
+    Tax rules shown are a demonstration, not tax advice. Invoice amounts are scaled down for the PayPal sandbox balance limit.
+  </footer>
+</div>
+
+<script>
+  window.CROSSBILL = { dryRun: {{ dry_run|tojson }}, categories: {{ categories|tojson }}, journalHeader: {{ journal_header|tojson }} };
+</script>
+<script src="{{ url_for('static', path='app.js') }}"></script>
+</body>
+</html>

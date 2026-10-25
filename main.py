@@ -6,12 +6,14 @@ Run:
 import logging
 import os
 from datetime import date
-from typing import Literal
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -21,7 +23,10 @@ from services import samples as sample_service
 load_dotenv()
 log = logging.getLogger("crossbill")
 
+BASE_DIR = Path(__file__).resolve().parent
 app = FastAPI(title="Crossbill")
+app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
 def dry_run() -> bool:
@@ -64,6 +69,15 @@ class DecideRequest(BaseModel):
 
 
 # ---------- routes ----------
+@app.get("/", response_class=HTMLResponse)
+def index(request: Request):
+    return templates.TemplateResponse(request, "index.html", {
+        "dry_run": dry_run(),
+        "categories": decision_service.CATEGORIES,
+        "journal_header": decision_service.JOURNAL_HEADER,
+    })
+
+
 @app.get("/healthz")
 def healthz():
     return {"ok": True, "dry_run": dry_run()}
