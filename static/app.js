@@ -16,6 +16,13 @@
   };
   let decideSeq = 0;
   let grid = null;
+  let pollTimer = null;
+  let pollSeq = 0;
+
+  // after approval the payout status is checked automatically until it settles
+  const POLL_INTERVAL_MS = 5000;
+  const POLL_LIMIT_MS = 3 * 60 * 1000;
+  const FINAL_STATUSES = new Set(["SUCCESS", "DENIED", "CANCELED", "FAILED", "RETURNED", "BLOCKED", "REVERSED", "REFUNDED"]);
 
   // ---------- formatting ----------
   const intFmt = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
@@ -146,6 +153,7 @@
     state.source = source;
     state.decision = null;
     state.payout = null;
+    stopPolling();
     $("confirm").checked = false;
     showApproveError("");
     renderPayout();
@@ -380,6 +388,7 @@
       });
       state.payout = res;
       renderPayout();
+      startPolling();
       showStatus(res.dry_run ? "Approved. Simulated payout recorded in the audit log." : "Approved. Payout sent to PayPal.");
     } catch (e) {
       showStatus("");
@@ -401,16 +410,49 @@
     $("batch-status").textContent = p.batch_status + (p.dry_run ? " (simulated)" : "");
   }
 
+  function payoutSettled() {
+    const p = state.payout;
+    return Boolean(p) && (FINAL_STATUSES.has(p.batch_status) || FINAL_STATUSES.has(p.item_status));
+  }
+
   async function refreshStatus() {
     if (!state.payout) return;
+    const batchId = state.payout.payout_batch_id;
     try {
-      const res = await api(`/api/payout/${encodeURIComponent(state.payout.payout_batch_id)}`);
+      const res = await api(`/api/payout/${encodeURIComponent(batchId)}`);
+      if (!state.payout || state.payout.payout_batch_id !== batchId) return; // another invoice was loaded meanwhile
       state.payout = { ...state.payout, batch_status: res.batch_status, item_status: res.item_status };
       renderPayout();
       renderSteps();
     } catch (e) {
       showStatus(e.message, "error");
     }
+  }
+
+  function stopPolling() {
+    pollSeq += 1; // any check still in flight sees a newer seq and stops
+    clearTimeout(pollTimer);
+    pollTimer = null;
+  }
+
+  // check every 5 seconds for up to 3 minutes; stop as soon as the status is final
+  function startPolling() {
+    stopPolling();
+    if (!state.payout || payoutSettled()) return;
+    const seq = pollSeq;
+    const deadline = Date.now() + POLL_LIMIT_MS;
+    const tick = async () => {
+      await refreshStatus();
+      if (seq !== pollSeq) return;
+      if (payoutSettled()) { pollTimer = null; return; }
+      if (Date.now() + POLL_INTERVAL_MS > deadline) {
+        pollTimer = null;
+        showStatus("The payout is still pending after 3 minutes. Use Refresh status to check again.");
+        return;
+      }
+      pollTimer = setTimeout(tick, POLL_INTERVAL_MS);
+    };
+    pollTimer = setTimeout(tick, POLL_INTERVAL_MS);
   }
 
   // ---------- wiring ----------
