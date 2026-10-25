@@ -138,7 +138,7 @@
     state.decision = null;
     state.payout = null;
     $("confirm").checked = false;
-    $("payout").classList.add("hidden");
+    renderPayout();
 
     // "Pay in": JPY or the invoice currency
     const sel = document.querySelector('[name="pay_currency"]');
@@ -304,7 +304,7 @@
         { field: "amount_fx", headerName: "Amount (FX)", width: 100, ...num,
           valueFormatter: (p) => money(state.invoice.currency, p.value) },
         { field: "amount_jpy", headerName: "Amount (JPY)", width: 105, ...num, valueFormatter: (p) => intFmt.format(p.value) },
-        { field: "category", headerName: "Category (edit)", width: 190, editable: true,
+        { field: "category", headerName: "Category (edit)", width: 190, editable: () => !state.payout,
           cellEditor: CategoryEditor,
           valueFormatter: (p) => label(p.value),
           cellClass: "cell-category",
@@ -322,8 +322,6 @@
       onCellValueChanged: (p) => {
         if (p.colDef.field !== "category" || p.newValue === p.oldValue) return;
         state.invoice.line_items[p.data.idx].category = p.newValue;
-        state.payout = null;
-        $("payout").classList.add("hidden");
         decide();
       },
     });
@@ -366,7 +364,7 @@
       });
       state.payout = res;
       renderPayout();
-      showStatus("");
+      showStatus(res.dry_run ? "Approved. Simulated payout recorded in the audit log." : "Approved. Payout sent to PayPal.");
     } catch (e) {
       showStatus(`Approval failed: ${e.message}`, "error");
     }
@@ -376,6 +374,9 @@
 
   function renderPayout() {
     const p = state.payout;
+    // after approval the page shows exactly what was paid: no more edits to this invoice
+    for (const el of $("settings-form").elements) if (!el.dataset.sync) el.disabled = Boolean(p);
+    $("confirm").disabled = Boolean(p);
     $("payout").classList.toggle("hidden", !p);
     if (!p) return;
     $("batch-id").textContent = p.payout_batch_id;
