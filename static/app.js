@@ -69,7 +69,11 @@
       if (state.payout) {
         done.add(4);
         current = 5;
-        if (state.payout.batch_status === "SUCCESS") done.add(5);
+        // a successful payout means approval and payment are both complete
+        if (state.payout.batch_status === "SUCCESS" || state.payout.item_status === "SUCCESS") {
+          done.add(4);
+          done.add(5);
+        }
       }
     }
     document.querySelectorAll("#steps .step").forEach((li) => {
@@ -167,7 +171,7 @@
     const fields = [
       ["Vendor", inv.vendor_name],
       ["Country", inv.vendor_country],
-      ["Individual", inv.vendor_is_individual ? "Yes (sole proprietor)" : "No (company)"],
+      ["Vendor type", (inv.vendor_is_individual ? "Individual (sole proprietor)" : "Company") + " (AI's best guess)"],
       ["Invoice number", inv.invoice_number],
       ["Issue date", inv.issue_date],
       ["Due date", inv.due_date],
@@ -401,7 +405,7 @@
     if (!state.payout) return;
     try {
       const res = await api(`/api/payout/${encodeURIComponent(state.payout.payout_batch_id)}`);
-      state.payout = { ...state.payout, batch_status: res.batch_status };
+      state.payout = { ...state.payout, batch_status: res.batch_status, item_status: res.item_status };
       renderPayout();
       renderSteps();
     } catch (e) {
