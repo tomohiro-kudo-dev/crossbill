@@ -55,8 +55,8 @@ The original Streamlit UI is kept as a reference: `streamlit run app.py`.
    `{"ok": true, "dry_run": true, ...}`. If `receiver_email_ok` is `false`, fix `PAYPAL_RECEIVER_EMAIL`.
 
 The public demo keeps `PAYOUT_DRY_RUN=true`. Live AI extraction is limited per visitor
-(`EXTRACT_RATE_LIMIT_PER_HOUR`) to protect API credits. On Render's free plan the disk is temporary,
-so `audit_log.jsonl` is reset when the service restarts or redeploys.
+(`EXTRACT_RATE_LIMIT_PER_HOUR`) to protect API credits. Render's disk is temporary unless you attach
+a persistent disk, so `audit_log.jsonl` is reset when the service restarts or redeploys.
 
 ## Configuration
 | Variable | Default | Meaning |
